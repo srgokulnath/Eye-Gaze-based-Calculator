@@ -1,0 +1,216 @@
+import cv2
+import numpy as np
+import dlib
+from math import hypot
+cap = cv2.VideoCapture(0)
+detector = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+keyboard = np.zeros((500,300,3),np.uint8)
+height,width = 100,100
+x,y,k = 0,0,50
+#print(a[0][0][0])
+board = np.zeros((500,300),np.uint8)
+board[:]= 0
+b = {0:"7",1:"8",2:"9",3:"4",4:"5",5:"6",6:"1",7:"2",8:"3",9:"+",10:"%",11:"-",12:"/",13:"0",14:"*"}
+def rect(letter_index,text,letter_light):
+    if letter_index == 0:
+        x = 0
+        y = 0
+    elif letter_index == 1:
+        x = 100
+        y = 0
+    elif letter_index == 2:
+        x = 200
+        y = 0
+    elif letter_index == 3:
+        x = 0
+        y = 100
+    elif letter_index == 4:
+        x = 100
+        y = 100
+    elif letter_index == 5:
+        x = 200
+        y = 100
+    elif letter_index == 6:
+        x = 0
+        y = 200
+    elif letter_index == 7:
+        x = 100
+        y = 200
+    elif letter_index == 8:
+        x = 200
+        y = 200
+    elif letter_index == 9:
+        x = 0
+        y = 300
+    elif letter_index == 10:
+        x =100
+        y = 300
+    elif letter_index == 11:
+        x = 200
+        y = 300
+    elif letter_index == 12:
+        x = 0
+        y = 400
+    elif letter_index == 13:
+        x = 100
+        y = 400
+    elif letter_index == 14:
+        x = 200
+        y = 400
+    if letter_light == True:
+        cv2.rectangle(keyboard, (x , y), (x + width, y + height), (125, 125, 125), -1)
+
+    cv2.rectangle(keyboard,(x,y),(x+100,y+100),(0,0,0),3)
+    text_size = cv2.getTextSize(text,cv2.FONT_HERSHEY_PLAIN,3,1)[0]
+    width_text,height_text = text_size[0],text_size[1]
+    p,q = int((width-width_text)/2),int((height+height_text)/2)
+
+    cv2.putText(keyboard,text,(p+x,q+y),cv2.FONT_HERSHEY_PLAIN,2,(255,255,255),1)
+def mid_point(p1,p2):
+    return int((p1.x+p2.x)/2),int((p1.y+p2.y)/2)
+def blinkingratio(pts,eye_landmark):
+
+
+    x, y = eye_landmark.part(pts[0]).x, eye_landmark.part(pts[0]).y
+    x1, y1 = eye_landmark.part(pts[3]).x, eye_landmark.part(pts[3]).y
+    #hor_line = cv2.line(frame, (x, y), (x1, y1), (0, 255, 0), 1)
+    a1 = mid_point(eye_landmark.part(pts[1]), eye_landmark.part(pts[2]))
+    a2 = mid_point(eye_landmark.part(pts[4]), eye_landmark.part(pts[5]))
+    #ver_line = cv2.line(frame, a1, a2, (0, 0, 255), 1)
+
+    hor_line_length = hypot(x - x1, y - y1)
+    ver_line_length = hypot(a1[0] - a2[0], a1[1] - a2[1])
+    if ver_line_length !=0:
+        ratio = int(hor_line_length / ver_line_length)
+    else:
+        ratio = 4
+    return ratio
+def gazeratio(pts,facial_landmarks):
+    left_eye_cordinates = np.array([(facial_landmarks.part(pts[0]).x, facial_landmarks.part(pts[0]).y),
+                                    (facial_landmarks.part(pts[1]).x, facial_landmarks.part(pts[1]).y),
+                                    (facial_landmarks.part(pts[2]).x, facial_landmarks.part(pts[2]).y),
+                                    (facial_landmarks.part(pts[3]).x, facial_landmarks.part(pts[3]).y),
+                                    (facial_landmarks.part(pts[4]).x, facial_landmarks.part(pts[4]).y),
+                                    (facial_landmarks.part(pts[5]).x, facial_landmarks.part(pts[5]).y)], np.int32)
+    # cv2.polylines(frame,[left_eye_cordinates],True,(0,0,255),1)
+    width, height, _ = frame.shape
+    mask = np.zeros((width, height), np.uint8)
+    cv2.polylines(mask, [left_eye_cordinates], True, (255, 255, 255), 3)
+    cv2.fillPoly(mask, [left_eye_cordinates], (255, 255, 255))
+    eye_gray = cv2.bitwise_and(gray_frame, gray_frame, mask=mask)
+    min_x = np.min(left_eye_cordinates[:, 0])
+    max_x = np.max(left_eye_cordinates[:, 0])
+    min_y = np.min(left_eye_cordinates[:, 1])
+    max_y = np.max(left_eye_cordinates[:, 1])
+    left_eye_zoomed = eye_gray[min_y:max_y, min_x:max_x]
+    _, threshold_eye_zoomed = cv2.threshold(left_eye_zoomed, 70, 255, cv2.THRESH_BINARY)
+    threshold_eye_zoomed = cv2.resize(threshold_eye_zoomed, None, fx=5, fy=5)
+    width, height = threshold_eye_zoomed.shape
+    left_eye_threshold = threshold_eye_zoomed[0:width, 0:int(height / 2)]
+    whites_left_threshold = cv2.countNonZero(left_eye_threshold)
+    right_eye_threshold = threshold_eye_zoomed[0:width, int(height / 2):height]
+    whites_right_threshold = cv2.countNonZero(right_eye_threshold)
+    #cv2.imshow("left",left_eye_threshold)
+    #cv2.imshow("right",right_eye_threshold)
+    if whites_left_threshold == 0:
+        gaze_ratio = 1.9
+    elif whites_right_threshold ==0:
+        gaze_ratio = 0.35
+    else:
+        gaze_ratio = whites_left_threshold / whites_right_threshold
+    return  gaze_ratio
+reel = 0
+blinking_frames = 0
+letter_index = 0
+text =""
+dir_frames = 0
+while True:
+
+    success,frame = cap.read()
+    reel+=1
+    keyboard[:] = (0,0,0)
+    gray_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+    faces = detector(gray_frame)
+    ac_letter = b[letter_index]
+    #print(faces)
+    for face in faces:
+        #print(face)
+
+        landmarks = predictor(gray_frame,face)
+        left_eye_ratio = blinkingratio([36,37,38,39,40,41],landmarks)
+        right_eye_ratio = blinkingratio([42,43,44,45,46,47],landmarks)
+        ratio = (left_eye_ratio+right_eye_ratio)/2
+        #print(ratio)
+        if ratio > 3.0:
+            blinking_frames+=1
+            reel -=1
+            #cv2.putText(frame,"Blinking",(50,100),cv2.FONT_HERSHEY_PLAIN,2,(0,0,255),3)
+            if blinking_frames ==7:
+                text +=ac_letter
+
+
+
+
+
+
+        else:
+            blinking_frames = 0
+        left_eye = gazeratio([36,37,38,39,40,41],landmarks)
+        right_eye = gazeratio([42,43,44,45,46,47],landmarks)
+        dir_ratio = (left_eye+right_eye)/2
+        #print(dir_ratio)
+
+        if 1.1<=dir_ratio<200000:
+            dir_frames+=1
+            cv2.putText(frame,"left",(50,100),cv2.FONT_HERSHEY_PLAIN,2,(0,0,255),3)
+            if dir_frames ==105:
+                try:
+                    eval_text = eval(text)
+                    # print(eval_text)
+                    eval_text = str(eval_text)
+                    text = text + "=" + eval_text
+                    reel = 0
+                    dir_frames = 0
+
+                except Exception as e:
+                    k+=40
+                    text ="Error"
+                    reel = 0
+                    dir_frames = 0
+        #elif 0.75<dir_ratio<1.1:
+            #cv2.putText(frame,"Center",(50,100),cv2.FONT_HERSHEY_PLAIN,2,(0,0,255),3)
+        elif -20000<dir_ratio<=0.7:
+            dir_frames+=1
+            cv2.putText(frame,"Right",(50,100),cv2.FONT_HERSHEY_PLAIN,2,(0,0,255),3)
+            if dir_frames==85:
+                k += 40
+                text = ""
+                eval_text = ""
+                reel = 0
+                dir_frames = 0
+
+    if reel ==15:
+        letter_index+=1
+        reel = 0
+    if letter_index == 15:
+        letter_index = 0
+    for i in range(15):
+        if i == letter_index:
+            letter_light = True
+        else:
+            letter_light = False
+        rect(i, b[i], letter_light)
+    cv2.putText(board, ">>>", (0, k), cv2.FONT_HERSHEY_COMPLEX, 1, 255, 1)
+
+    cv2.putText(board, text, (70, k), cv2.FONT_HERSHEY_COMPLEX, 1, 255, 1)
+
+    cv2.imshow("keyborad", keyboard)
+    #cv2.imshow("hllo",eval_board)
+    cv2.imshow("screen", board)
+    cv2.imshow("Frame",frame)
+    key = cv2.waitKey(1)
+    if key ==27:
+        break
+cap.release()
+cv2.destroyAllWindows()
